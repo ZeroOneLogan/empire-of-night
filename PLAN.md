@@ -8,13 +8,17 @@ The game should feel readable, fast, and tactical rather than sprawling. Each ru
 
 ## Current Repo State
 
-The repo currently contains a minimal Phaser 3 scaffold:
+The repo now contains the first playable tactical vertical slice:
 
 - Vite + TypeScript app entry in `src/main.ts`
-- Phaser 3 dependency
-- Basic canvas render with the title text `Empire of Night`
-- Playwright smoke test in `tests/e2e/smoke.spec.ts`
-- Vite dev server pinned to port `4173`
+- Phaser 3 scene boundaries for boot, menu, and battle
+- Pure TypeScript battle simulation under `src/game/simulation/`
+- Authored opening encounter content under `src/game/content/`
+- Phaser grid/unit rendering under `src/phaser/view/`
+- DOM tactical HUD, commands, combat log, result overlay, and menu shell under `src/ui/`
+- Development-only debug bridge `window.__empireOfNight`
+- Playwright smoke coverage for boot, debug state, and deterministic battle victory
+- Vite dev server and Playwright base URL pinned to port `4173`
 
 This plan becomes the source of truth for future implementation. If code and this plan disagree, update the plan intentionally or call out the mismatch before continuing.
 
@@ -141,6 +145,8 @@ All persisted state must be versioned from the first save implementation.
 
 ### Milestone 0: Project Foundation
 
+Status: Complete as of 2026-05-12.
+
 - Replace the single-scene scaffold with a durable project structure.
 - Add boot/preload/menu/battle scene boundaries.
 - Add deterministic simulation state and a testable action reducer.
@@ -148,6 +154,8 @@ All persisted state must be versioned from the first save implementation.
 - Acceptance: build passes, smoke test loads canvas, debug bridge exposes version and current screen.
 
 ### Milestone 1: Tactical Grid Vertical Slice
+
+Status: Complete as of 2026-05-12 for the opening one-unit encounter.
 
 - Render a tactical grid with obstacles and deployment positions.
 - Add one player unit, one enemy, movement previews, attack previews, and turn ending.
