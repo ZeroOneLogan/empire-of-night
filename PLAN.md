@@ -17,7 +17,36 @@ The repo now contains the first playable tactical vertical slice:
 - Phaser grid/unit rendering under `src/phaser/view/`
 - DOM tactical HUD, commands, combat log, result overlay, and menu shell under `src/ui/`
 - Development-only debug bridge `window.__empireOfNight`
-- Playwright smoke coverage for boot, debug state, and deterministic battle victory
+- Three-unit court squad, three dawn enemy archetypes, readable enemy intent, statuses, downed units, and objective fail states
+- Six objective implementations: hold ritual site, eliminate commander, capture relic ledger, survive dawn waves, escape route, and protect fragile unit
+- Campaign route map with three tiers of branching district choices
+- Post-battle reward choices, run summary, restart flow, and versioned local meta progression
+- Content pass with 12 route encounters, 6 relic rewards, 5 dawn enemy archetypes, 4 hazard types, cover terrain, 5 doctrine identities, district codex notes, and reward comparison UI
+- Presentation pass with pause, settings, run history, event feedback strip, persistent audio/motion preferences, authored WebAudio cue palette, and stronger tactical HUD feedback
+- Tactical preview HUD that shows active unit AP, move, armor, status, selected ability, legal move count, and target-by-target projected attack damage
+- Canvas hover preview layer for tactical moves, move-path trails, destination threat lines, invalid tiles, selectable units, attack targets, projected damage, and hazard context
+- Court special-ability command with distinct second abilities for regent, knight, and occultist, including ranged disruption and status effects on hotkey `4`
+- Tactical interact command on hotkey `5` for channeling ritual objectives and claiming relic caches through the simulation reducer
+- Active once-per-battle relic command on hotkey `R` for campaign battles with bound relics, including deterministic relic-specific effects
+- Relic reward cards now preview each relic's once-per-battle active command before the player binds it
+- Route-event relic bargains also preview the relic's once-per-battle active command before the player accepts the bargain
+- Cover terrain that reduces ranged damage, renders as readable defensive board geometry, and appears in tactical damage previews
+- Flanking pressure that rewards pinning dawn units with another adjacent court unit, including projected +1 damage in HUD and hover previews
+- Line-of-sight checks for ranged attacks, with obstacles blocking straight lanes and blocked targets surfaced in tactical previews
+- Canvas blocked-sightline hover feedback that draws the interrupted ray and marks the obstacle blocking the shot
+- Phaser battle renderer polish with layered board treatment, hazard glyphs, attack-range overlays, commander/elite halos, status pips, and court action pips
+- Combat effects pass with transient strike lines, damage numbers, movement and guard pulses, hazard/status pulses, objective pulses, and dawn-pressure board feedback derived from simulation events
+- Active relic invocation effects with distinct burst colors, labels, and secondary pulses for mirror, bell, thorn key, market mask, nightglass, and crown relic events
+- Manifest-driven SVG unit token assets for all court and dawn archetypes, preloaded by Phaser and rendered on the tactical board with procedural fallback shapes
+- Polished command-table menu scene with route-map composition, court token lineup, Dawn Exarch threat marker, and browser-verified non-overlapping layout beside DOM run controls
+- Outcome presentation pass with battle ledgers, objective-specific victory/defeat copy, commander/district-specific victory events, survivor/dawn-pressure statistics, objective records, route-conquest ledger, spoils/pressure summary, codex recap, and meta record display
+- Campaign decision polish with route progress stages, carried-pressure and archive intel, route risk/reward hints, event stakes chips, and post-battle reward ledger context
+- Production runtime split with Phaser isolated into a named `phaser-runtime` chunk, a small app entry chunk, clean Vite build output, and production preview proof
+- Playwright local runs pinned to one worker to keep canvas screenshot and UI interaction checks stable on the desktop browser runtime
+- Balance and replayability pass with deterministic seeded routes, standard/hard/nightmare difficulty bands, run estimates, route risk diagnostics, and seed/difficulty run history
+- Browser hardening pass with explicit BattleScene input/render cleanup, shorter-laptop route layout support, wider desktop route/battle layouts, and repeated restart/transition coverage
+- Long-roadmap gameplay expansion slices with selectable leaders, named relic synergies, deterministic reward effects, route narrative events, optional challenge modifiers, challenge-aware later battle setup, and a distinct Dawn Exarch boss commander
+- Playwright smoke coverage for boot, unit asset loading, debug state, content catalog breadth, seeded replay/difficulty balance, alternate leaders, settings persistence, commander, capture-relic, survive-dawn, escape-route, and protect-unit objectives, tactical preview readability, court special abilities, tactical interactions, active relic command and reward/event previews, flanking damage, line-of-sight blocking, blocked-sightline hover feedback, cover damage reduction, canvas hover/path previews, battle and campaign outcome ledgers, objective-specific victory/defeat result copy, commander and district victory event copy, Dawn Exarch boss, deterministic victory/defeat, repeated restart/scene transitions, reward effects, route-event challenges, and a four-encounter campaign run with persisted history
 - Vite dev server and Playwright base URL pinned to port `4173`
 
 This plan becomes the source of truth for future implementation. If code and this plan disagree, update the plan intentionally or call out the mismatch before continuing.
@@ -164,6 +193,8 @@ Status: Complete as of 2026-05-12 for the opening one-unit encounter.
 
 ### Milestone 2: Squad Combat And Objectives
 
+Status: Complete as of 2026-05-12.
+
 - Add three player unit archetypes: regent, knight, and occultist.
 - Add at least three enemy archetypes with readable intent.
 - Add two objective types: eliminate commander and hold ritual site.
@@ -172,12 +203,16 @@ Status: Complete as of 2026-05-12 for the opening one-unit encounter.
 
 ### Milestone 3: Campaign Route And Rewards
 
+Status: Complete as of 2026-05-12.
+
 - Add campaign route map with branching district choices.
 - Add battle rewards: unit upgrade, relic, resource, doctrine shift.
 - Add run summary, restart flow, and basic meta unlock persistence.
 - Acceptance: player can complete at least three encounters in one run and restart with saved meta progress.
 
 ### Milestone 4: Content Pass
+
+Status: Complete as of 2026-05-12.
 
 - Add 8-12 encounters, 6 relics, 5 enemy types, 4 hazards, and 3 doctrines.
 - Add district identity: crypt, market, chapel, canal, wall, palace.
@@ -186,12 +221,16 @@ Status: Complete as of 2026-05-12 for the opening one-unit encounter.
 
 ### Milestone 5: Presentation And UX
 
+Status: Complete as of 2026-05-12.
+
 - Add main menu, pause menu, settings, run history, tactical HUD, and readable combat log.
 - Add effects for movement, impact, status, objective progress, and dawn pressure.
-- Add placeholder audio pass.
+- Add authored audio cues for select, menu confirm, move, attack, hit, guard, turn start, dawn warning, reward, victory, and defeat.
 - Acceptance: all major actions have visible feedback, no essential text overlaps at desktop viewport sizes.
 
 ### Milestone 6: Balance And Replayability
+
+Status: Complete as of 2026-05-12.
 
 - Tune action economy, enemy pressure, reward frequency, and dawn meter.
 - Add seed support for deterministic replay/debugging.
@@ -200,12 +239,16 @@ Status: Complete as of 2026-05-12 for the opening one-unit encounter.
 
 ### Milestone 7: Browser Hardening
 
+Status: Complete as of 2026-05-12.
+
 - Optimize render/update loops, texture usage, event cleanup, and scene transitions.
 - Add responsive desktop layouts for common laptop and wide monitor sizes.
 - Expand Playwright coverage for battle, route, save/load, and restart flows.
 - Acceptance: stable under repeated restart and scene-transition tests.
 
 ### Milestone 8: Long Roadmap Expansion
+
+Status: Complete as of 2026-05-12.
 
 - Add additional leaders, faction bosses, elite encounters, relic synergies, narrative events, and optional challenge modifiers.
 - Consider optional AI-assisted content tooling outside runtime gameplay, but keep shipped gameplay deterministic and local unless the plan is explicitly revised.
