@@ -36,24 +36,6 @@ export class MenuScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    const start = this.add
-      .text(width / 2, 330, 'Begin Opening Battle', {
-        backgroundColor: '#7f213b',
-        color: '#fff7df',
-        fontFamily: 'Arial, sans-serif',
-        fontSize: '18px',
-        padding: { x: 24, y: 14 },
-      })
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true });
-
-    start.on('pointerover', () => start.setStyle({ backgroundColor: '#a3334f' }));
-    start.on('pointerout', () => start.setStyle({ backgroundColor: '#7f213b' }));
-    start.on('pointerup', () => {
-      empireStore.dispatch({ type: 'startBattle' });
-      this.scene.start('battle');
-    });
-
     this.unsubscribe = empireStore.subscribe((snapshot) => {
       if (snapshot.currentScreen === 'battle') {
         this.scene.start('battle');
