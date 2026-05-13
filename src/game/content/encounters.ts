@@ -8,12 +8,28 @@ const abilities = {
     damage: 4,
     description: 'A close command-blade attack that deals 4 damage.',
   },
+  imperialDecree: {
+    id: 'imperial-decree',
+    name: 'Imperial Decree',
+    range: 3,
+    damage: 2,
+    status: 'dazed',
+    description: 'A command hex that deals 2 damage and dazes a dawn unit at range.',
+  },
   oathCleave: {
     id: 'oath-cleave',
     name: 'Oath Cleave',
     range: 1,
     damage: 5,
     description: 'A heavy knight strike that cuts through armor.',
+  },
+  oathHook: {
+    id: 'oath-hook',
+    name: 'Oath Hook',
+    range: 2,
+    damage: 3,
+    status: 'dazed',
+    description: 'A reach attack that disrupts a nearby dawn unit.',
   },
   bloodHex: {
     id: 'blood-hex',
@@ -22,6 +38,14 @@ const abilities = {
     damage: 3,
     status: 'bleeding',
     description: 'A ranged occult attack that deals 3 damage and marks the target as bleeding.',
+  },
+  veilBind: {
+    id: 'veil-bind',
+    name: 'Veil Bind',
+    range: 4,
+    damage: 1,
+    status: 'dazed',
+    description: 'A long-range binding curse that dazes a target and sets up safer turns.',
   },
   sunSpear: {
     id: 'sun-spear',
@@ -71,13 +95,18 @@ const abilities = {
 } as const;
 
 interface EncounterConfig {
-  objective: 'hold_ritual' | 'eliminate_commander';
+  objective: 'hold_ritual' | 'eliminate_commander' | 'capture_relic' | 'survive_dawn' | 'escape_route' | 'protect_unit';
   description: string;
   event: string;
   ritualTiles?: GridPosition[];
+  relicTiles?: GridPosition[];
+  exitTiles?: GridPosition[];
+  requiredEscapes?: number;
+  protectedUnitId?: string;
   requiredTurns?: number;
   commanderId?: string;
   obstacles: string[];
+  cover: string[];
   hazards: Partial<Record<HazardId, string[]>>;
   enemies: UnitArchetype[];
   dawnMax: number;
@@ -96,6 +125,7 @@ const encounterConfigs: Record<EncounterId, EncounterConfig> = {
     ritualTiles: [{ x: 3, y: 2 }, { x: 3, y: 3 }],
     requiredTurns: 2,
     obstacles: ['3,1', '1,4', '5,3'],
+    cover: ['2,1', '4,3'],
     hazards: { veil_fog: ['0,1'], blood_mire: ['2,4'] },
     enemies: ['dawn_soldier', 'sun_acolyte', 'inquisitor'],
     dawnMax: 6,
@@ -106,6 +136,7 @@ const encounterConfigs: Record<EncounterId, EncounterConfig> = {
     event: 'The Gate Inquisitor anchors the dawn patrol. Break the commander to claim the crypt gate.',
     commanderId: 'inquisitor',
     obstacles: ['3,1', '1,4', '5,3'],
+    cover: ['5,2', '2,2'],
     hazards: { sunflare: ['4,2'], relic_cache: ['2,3'] },
     enemies: ['dawn_soldier', 'sun_acolyte', 'inquisitor'],
     dawnMax: 7,
@@ -117,6 +148,7 @@ const encounterConfigs: Record<EncounterId, EncounterConfig> = {
     ritualTiles: [{ x: 3, y: 2 }, { x: 3, y: 3 }],
     requiredTurns: 2,
     obstacles: ['1,4', '3,1', '5,3'],
+    cover: ['2,1', '4,3'],
     hazards: { blood_mire: ['2,4', '4,4'], veil_fog: ['0,1'] },
     enemies: ['dawn_soldier', 'sun_acolyte', 'inquisitor'],
     dawnMax: 6,
@@ -127,6 +159,7 @@ const encounterConfigs: Record<EncounterId, EncounterConfig> = {
     event: 'The inquisitor carries the gate writ. Defeating him will scatter the patrol.',
     commanderId: 'inquisitor',
     obstacles: ['2,1', '3,1', '1,4'],
+    cover: ['4,2', '5,4'],
     hazards: { blood_mire: ['2,3'], relic_cache: ['0,4'] },
     enemies: ['dawn_soldier', 'inquisitor', 'bell_warden'],
     dawnMax: 7,
@@ -137,17 +170,18 @@ const encounterConfigs: Record<EncounterId, EncounterConfig> = {
     event: 'Shutters slam closed. Lantern marksmen take the market roofs.',
     commanderId: 'lantern-marksman',
     obstacles: ['2,2', '4,3', '1,4'],
+    cover: ['3,1', '5,2'],
     hazards: { veil_fog: ['1,1', '2,1'], relic_cache: ['3,4'] },
     enemies: ['lantern_marksman', 'dawn_soldier', 'sun_acolyte'],
     dawnMax: 7,
   },
   'market-relic': {
-    objective: 'hold_ritual',
-    description: 'Hold the auction dais for 2 turns to seize the relic ledger.',
-    event: 'A forbidden auction spills into violence around the relic cache.',
-    ritualTiles: [{ x: 3, y: 2 }, { x: 4, y: 2 }],
-    requiredTurns: 2,
+    objective: 'capture_relic',
+    description: 'Seize the auction relic ledger from the cache before dawn locks the market.',
+    event: 'A forbidden auction spills into violence. Reach the cache and spend an interact order to seize the relic ledger.',
+    relicTiles: [{ x: 3, y: 2 }],
     obstacles: ['1,3', '3,4', '5,1'],
+    cover: ['2,2', '4,3'],
     hazards: { relic_cache: ['3,2'], veil_fog: ['5,4'] },
     enemies: ['lantern_marksman', 'bell_warden', 'dawn_soldier'],
     dawnMax: 7,
@@ -158,17 +192,18 @@ const encounterConfigs: Record<EncounterId, EncounterConfig> = {
     event: 'The chapel bell begins to toll. Its warden is slow, armored, and dangerous.',
     commanderId: 'bell-warden',
     obstacles: ['3,2', '3,3', '1,1'],
+    cover: ['2,4', '5,2'],
     hazards: { sunflare: ['4,2', '4,3'], blood_mire: ['2,4'] },
     enemies: ['bell_warden', 'sun_acolyte', 'dawn_soldier'],
     dawnMax: 7,
   },
   'chapel-pyre': {
-    objective: 'hold_ritual',
-    description: 'Hold the ash circle for 2 turns under chapel sunfire.',
-    event: 'Sunfire crawls across the ash circle. The court must endure and hold.',
-    ritualTiles: [{ x: 2, y: 2 }, { x: 3, y: 2 }],
+    objective: 'survive_dawn',
+    description: 'Survive 2 dawn waves under chapel sunfire.',
+    event: 'Sunfire crawls across the ash circle. The court must endure two dawn waves before the pyre gutters out.',
     requiredTurns: 2,
     obstacles: ['1,3', '5,3', '3,4'],
+    cover: ['2,1', '4,1'],
     hazards: { sunflare: ['2,3', '4,2', '4,4'] },
     enemies: ['sun_acolyte', 'bell_warden', 'lantern_marksman'],
     dawnMax: 6,
@@ -180,27 +215,31 @@ const encounterConfigs: Record<EncounterId, EncounterConfig> = {
     ritualTiles: [{ x: 3, y: 3 }, { x: 4, y: 3 }],
     requiredTurns: 2,
     obstacles: ['1,2', '5,2', '3,1'],
+    cover: ['2,4', '4,2'],
     hazards: { veil_fog: ['2,2', '2,3', '4,1'], relic_cache: ['0,4'] },
     enemies: ['dawn_soldier', 'lantern_marksman', 'sun_acolyte'],
     dawnMax: 7,
   },
   'canal-smugglers': {
-    objective: 'eliminate_commander',
-    description: 'Kill the lantern smuggler before the canal bridge opens.',
-    event: 'Dawn smugglers use lantern code to guide the patrol through fog.',
-    commanderId: 'lantern-marksman',
+    objective: 'escape_route',
+    description: 'Escape one court unit through the fog bridge before the canal patrol closes.',
+    event: 'Dawn smugglers use lantern code to guide the patrol through fog. Reach the west bridge and spend interact to escape.',
+    exitTiles: [{ x: 0, y: 4 }],
+    requiredEscapes: 1,
     obstacles: ['2,1', '2,4', '4,3'],
+    cover: ['1,3', '5,2'],
     hazards: { veil_fog: ['1,2', '3,2', '5,4'], blood_mire: ['4,1'] },
     enemies: ['lantern_marksman', 'dawn_soldier', 'bell_warden'],
     dawnMax: 7,
   },
   'wall-siege': {
-    objective: 'hold_ritual',
-    description: 'Hold the wall breach for 2 turns while wardens counterattack.',
-    event: 'The palace wall cracks open. The court must hold the breach.',
-    ritualTiles: [{ x: 3, y: 2 }, { x: 3, y: 3 }],
+    objective: 'protect_unit',
+    description: 'Protect the Veil Occultist for 2 turns while they seal the wall breach.',
+    event: 'The palace wall cracks open. Keep the Veil Occultist alive while they bind the breach shut.',
+    protectedUnitId: 'occultist',
     requiredTurns: 2,
     obstacles: ['1,1', '5,1', '5,4'],
+    cover: ['2,2', '4,3'],
     hazards: { relic_cache: ['3,3'], sunflare: ['4,3'] },
     enemies: ['bell_warden', 'dawn_soldier', 'lantern_marksman'],
     dawnMax: 7,
@@ -211,6 +250,7 @@ const encounterConfigs: Record<EncounterId, EncounterConfig> = {
     event: 'A wall inquisitor orders the breach sealed with living flame.',
     commanderId: 'inquisitor',
     obstacles: ['2,2', '3,2', '1,4'],
+    cover: ['4,1', '5,4'],
     hazards: { sunflare: ['4,2', '5,3'], veil_fog: ['0,1'] },
     enemies: ['inquisitor', 'bell_warden', 'sun_acolyte', 'lantern_marksman'],
     dawnMax: 8,
@@ -221,6 +261,7 @@ const encounterConfigs: Record<EncounterId, EncounterConfig> = {
     event: 'The Dawn Exarch descends through the palace gate, turning every order into sunlight.',
     commanderId: 'dawn-exarch',
     obstacles: ['3,1', '3,4', '5,2'],
+    cover: ['1,3', '4,4'],
     hazards: { sunflare: ['4,2'], blood_mire: ['2,4'], relic_cache: ['1,1'], veil_fog: ['0,3'] },
     enemies: ['dawn_exarch', 'bell_warden', 'lantern_marksman', 'sun_acolyte'],
     dawnMax: 8,
@@ -232,6 +273,7 @@ const encounterConfigs: Record<EncounterId, EncounterConfig> = {
     ritualTiles: [{ x: 3, y: 2 }, { x: 3, y: 3 }],
     requiredTurns: 2,
     obstacles: ['1,4', '5,1', '5,4'],
+    cover: ['2,1', '4,3'],
     hazards: { relic_cache: ['3,2'], sunflare: ['4,2'], blood_mire: ['2,4'] },
     enemies: ['inquisitor', 'bell_warden', 'dawn_soldier', 'sun_acolyte'],
     dawnMax: 8,
@@ -249,6 +291,7 @@ const hazardAt = (hazards: EncounterConfig['hazards'], key: string): HazardId | 
 
 const createTiles = (config: EncounterConfig): GridTile[] => {
   const obstacles = new Set(config.obstacles);
+  const cover = new Set(config.cover);
   const ritual = new Set(config.ritualTiles?.map((tile) => `${tile.x},${tile.y}`) ?? []);
   const tiles: GridTile[] = [];
 
@@ -259,7 +302,7 @@ const createTiles = (config: EncounterConfig): GridTile[] => {
       tiles.push({
         x,
         y,
-        terrain: obstacles.has(key) ? 'obstacle' : ritual.has(key) ? 'ritual' : 'floor',
+        terrain: obstacles.has(key) ? 'obstacle' : ritual.has(key) ? 'ritual' : cover.has(key) ? 'cover' : 'floor',
         ...(hazard ? { hazard } : {}),
       });
     }
@@ -336,7 +379,7 @@ const createUnit = (
       archetype === 'lantern_marksman' ||
       archetype === 'bell_warden' ||
       archetype === 'dawn_exarch',
-    abilities: [stats.ability],
+    abilities: stats.abilities,
     statuses: [],
   };
 };
@@ -344,23 +387,23 @@ const createUnit = (
 const unitStats = (archetype: UnitArchetype) => {
   switch (archetype) {
     case 'regent':
-      return { hp: 14, armor: 1, moveRange: 3, ability: abilities.imperialStrike };
+      return { hp: 14, armor: 1, moveRange: 3, abilities: [abilities.imperialStrike, abilities.imperialDecree] };
     case 'knight':
-      return { hp: 16, armor: 2, moveRange: 3, ability: abilities.oathCleave };
+      return { hp: 16, armor: 2, moveRange: 3, abilities: [abilities.oathCleave, abilities.oathHook] };
     case 'occultist':
-      return { hp: 10, armor: 0, moveRange: 3, ability: abilities.bloodHex };
+      return { hp: 10, armor: 0, moveRange: 3, abilities: [abilities.bloodHex, abilities.veilBind] };
     case 'dawn_soldier':
-      return { hp: 10, armor: 0, moveRange: 2, ability: abilities.sunSpear };
+      return { hp: 10, armor: 0, moveRange: 2, abilities: [abilities.sunSpear] };
     case 'sun_acolyte':
-      return { hp: 8, armor: 0, moveRange: 2, ability: abilities.radiantHex };
+      return { hp: 8, armor: 0, moveRange: 2, abilities: [abilities.radiantHex] };
     case 'inquisitor':
-      return { hp: 13, armor: 1, moveRange: 2, ability: abilities.verdictBlade };
+      return { hp: 13, armor: 1, moveRange: 2, abilities: [abilities.verdictBlade] };
     case 'lantern_marksman':
-      return { hp: 9, armor: 0, moveRange: 2, ability: abilities.lanternShot };
+      return { hp: 9, armor: 0, moveRange: 2, abilities: [abilities.lanternShot] };
     case 'bell_warden':
-      return { hp: 15, armor: 2, moveRange: 1, ability: abilities.bellCrush };
+      return { hp: 15, armor: 2, moveRange: 1, abilities: [abilities.bellCrush] };
     case 'dawn_exarch':
-      return { hp: 20, armor: 2, moveRange: 1, ability: abilities.solarDecree };
+      return { hp: 20, armor: 2, moveRange: 1, abilities: [abilities.solarDecree] };
   }
 };
 
@@ -389,18 +432,50 @@ export const createEncounterBattle = (id: EncounterId = 'ritual-hold'): BattleSt
             commanderId: config.commanderId ?? 'inquisitor',
             description: config.description,
           }
-        : {
-            type: 'hold_ritual',
-            ritualTiles: config.ritualTiles ?? [{ x: 3, y: 2 }],
-            heldTurns: 0,
-            requiredTurns: config.requiredTurns ?? 2,
-            description: config.description,
-          },
+        : config.objective === 'capture_relic'
+          ? {
+              type: 'capture_relic',
+              relicTiles: config.relicTiles ?? [{ x: 3, y: 2 }],
+              captured: false,
+              description: config.description,
+            }
+          : config.objective === 'survive_dawn'
+            ? {
+                type: 'survive_dawn',
+                survivedTurns: 0,
+                requiredTurns: config.requiredTurns ?? 2,
+                description: config.description,
+              }
+            : config.objective === 'escape_route'
+              ? {
+                  type: 'escape_route',
+                  exitTiles: config.exitTiles ?? [{ x: 0, y: 4 }],
+                  escapedUnitIds: [],
+                  requiredEscapes: config.requiredEscapes ?? 1,
+                  description: config.description,
+                }
+              : config.objective === 'protect_unit'
+                ? {
+                    type: 'protect_unit',
+                    protectedUnitId: config.protectedUnitId ?? 'occultist',
+                    protectedTurns: 0,
+                    requiredTurns: config.requiredTurns ?? 2,
+                    description: config.description,
+                  }
+              : {
+                  type: 'hold_ritual',
+                  ritualTiles: config.ritualTiles ?? [{ x: 3, y: 2 }],
+                  heldTurns: 0,
+                  requiredTurns: config.requiredTurns ?? 2,
+                  description: config.description,
+                },
     dawn: {
       value: 1,
       max: config.dawnMax,
     },
     enemyIntents: [],
+    claimedRelicCaches: [],
+    relicPowerUsed: false,
     events: [
       {
         id: 1,

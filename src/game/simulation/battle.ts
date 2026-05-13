@@ -67,6 +67,11 @@ const courtUnit = (state: BattleState, unitId: string | null | undefined) =>
 
 const activeUnit = (state: BattleState) => courtUnit(state, state.activeUnitId);
 
+const selectedAbility = (unit: UnitState | undefined, action: PlayerActionType = 'attack') =>
+  action === 'special' ? unit?.abilities[1] : unit?.abilities[0];
+
+const isTargetedAction = (action: PlayerActionType): boolean => action === 'attack' || action === 'special';
+
 const statusLabel = (status: StatusId): string => {
   switch (status) {
     case 'bleeding':
@@ -152,10 +157,74 @@ const applyHazardOnEnter = (state: BattleState, unit: UnitState): void => {
   }
 };
 
-const damageUnit = (unit: UnitState, amount: number): number => {
-  const guardReduction = unit.guarded ? 2 : 0;
-  const wardReduction = unit.statuses.some((status) => status.id === 'warded') ? 1 : 0;
-  const damageDone = Math.max(1, amount - unit.armor - guardReduction - wardReduction);
+const coverReduction = (state: BattleState, unit: UnitState, abilityRange: number): number => {
+  const tile = tileAt(state, unit.position);
+  return tile?.terrain === 'cover' && abilityRange > 1 ? 1 : 0;
+};
+
+export const getFlankingAllies = (state: BattleState, attackerId: string, targetId: string): UnitState[] => {
+  const attacker = state.units.find((unit) => unit.id === attackerId && !unit.downed && unit.hp > 0);
+  const target = state.units.find((unit) => unit.id === targetId && !unit.downed && unit.hp > 0);
+  if (!attacker || !target || attacker.faction !== 'court' || target.faction !== 'dawn') {
+    return [];
+  }
+
+  return livingUnits(state, 'court').filter(
+    (ally) => ally.id !== attacker.id && distance(ally.position, target.position) === 1,
+  );
+};
+
+export const getAttackDamagePreview = (
+  state: BattleState,
+  attackerId: string,
+  targetId: string,
+  amount: number,
+  abilityRange: number,
+): { damage: number; flankBonus: number } | null => {
+  const target = state.units.find((unit) => unit.id === targetId && !unit.downed && unit.hp > 0);
+  if (!target) {
+    return null;
+  }
+
+  const flankBonus = getFlankingAllies(state, attackerId, targetId).length > 0 ? 1 : 0;
+  const guardReduction = target.guarded ? 2 : 0;
+  const wardReduction = target.statuses.some((status) => status.id === 'warded') ? 1 : 0;
+  return {
+    damage: Math.max(1, amount + flankBonus - target.armor - guardReduction - wardReduction - coverReduction(state, target, abilityRange)),
+    flankBonus,
+  };
+};
+
+export const hasLineOfSight = (
+  state: BattleState,
+  from: GridPosition,
+  to: GridPosition,
+  abilityRange: number,
+): boolean => {
+  if (abilityRange <= 1) {
+    return true;
+  }
+
+  if (from.x !== to.x && from.y !== to.y) {
+    return false;
+  }
+
+  const stepX = Math.sign(to.x - from.x);
+  const stepY = Math.sign(to.y - from.y);
+  let cursor = { x: from.x + stepX, y: from.y + stepY };
+
+  while (!samePosition(cursor, to)) {
+    const tile = tileAt(state, cursor);
+    if (!tile || tile.terrain === 'obstacle') {
+      return false;
+    }
+    cursor = { x: cursor.x + stepX, y: cursor.y + stepY };
+  }
+
+  return true;
+};
+
+const damageUnit = (unit: UnitState, damageDone: number): number => {
   unit.hp = Math.max(0, unit.hp - damageDone);
   if (unit.hp <= 0) {
     markDowned(unit);
@@ -195,6 +264,43 @@ const objectiveIsHeld = (state: BattleState): boolean => {
   return livingUnits(state, 'court').some((unit) => ritualTiles.has(tileKey(unit.position)));
 };
 
+const commanderVictoryMessage = (state: BattleState, commander: UnitState | undefined): string => {
+  const name = commander?.name ?? 'The commander';
+  if (state.id === 'palace-gate') {
+    return `${name} is broken. The palace gate loses its sunlit command.`;
+  }
+
+  if (state.id.includes('wall')) {
+    return `${name} is broken. The wall patrol loses the breach.`;
+  }
+
+  if (state.id.includes('canal')) {
+    return `${name} is broken. Canal lantern code falls silent.`;
+  }
+
+  if (state.id.includes('market')) {
+    return `${name} is broken. The moon market shutters go dark.`;
+  }
+
+  if (state.id.includes('chapel')) {
+    return `${name} is broken. Chapel bells fall quiet.`;
+  }
+
+  return `${name} is broken. The crypt gate kneels.`;
+};
+
+const ritualVictoryMessage = (state: BattleState): string => {
+  if (state.id.includes('canal')) {
+    return 'The canal shrine is bound. Fog-banners rise over the black water.';
+  }
+
+  if (state.id.includes('crypt')) {
+    return 'The crypt sigil is bound. Night banners rise over the crypt gate.';
+  }
+
+  return 'The ritual completes. Night banners rise over the crypt gate.';
+};
+
 const refreshBattleResult = (state: BattleState): void => {
   if (state.result !== 'none') {
     return;
@@ -223,7 +329,56 @@ const refreshBattleResult = (state: BattleState): void => {
       state.phase = 'victory';
       state.result = 'victory';
       state.selectedAction = 'endTurn';
-      addEvent(state, 'objective', 'The Gate Inquisitor is broken. The crypt gate kneels.');
+      addEvent(state, 'objective', commanderVictoryMessage(state, commander));
+    }
+    return;
+  }
+
+  if (state.objective.type === 'capture_relic') {
+    if (state.objective.captured) {
+      state.phase = 'victory';
+      state.result = 'victory';
+      state.selectedAction = 'endTurn';
+      addEvent(state, 'objective', 'The relic ledger is seized. Market oaths bend toward the night court.');
+    }
+    return;
+  }
+
+  if (state.objective.type === 'survive_dawn') {
+    if (state.objective.survivedTurns >= state.objective.requiredTurns) {
+      state.phase = 'victory';
+      state.result = 'victory';
+      state.selectedAction = 'endTurn';
+      addEvent(state, 'objective', 'The court survives the dawn pyre. Chapel fires gutter into imperial ash.');
+    }
+    return;
+  }
+
+  if (state.objective.type === 'escape_route') {
+    if (state.objective.escapedUnitIds.length >= state.objective.requiredEscapes) {
+      state.phase = 'victory';
+      state.result = 'victory';
+      state.selectedAction = 'endTurn';
+      addEvent(state, 'objective', 'The court slips through the fog bridge. Canal patrols lose the trail.');
+    }
+    return;
+  }
+
+  if (state.objective.type === 'protect_unit') {
+    const protectedUnit = state.units.find((unit) => unit.id === state.objective.protectedUnitId);
+    if (!protectedUnit || protectedUnit.downed || protectedUnit.hp <= 0) {
+      state.phase = 'defeat';
+      state.result = 'defeat';
+      state.selectedAction = 'endTurn';
+      addEvent(state, 'objective', 'The protected court anchor falls. The wall breach collapses under dawn command.');
+      return;
+    }
+
+    if (state.objective.protectedTurns >= state.objective.requiredTurns) {
+      state.phase = 'victory';
+      state.result = 'victory';
+      state.selectedAction = 'endTurn';
+      addEvent(state, 'objective', `${protectedUnit.name} seals the breach. The wall opens to the night court.`);
     }
     return;
   }
@@ -232,7 +387,7 @@ const refreshBattleResult = (state: BattleState): void => {
     state.phase = 'victory';
     state.result = 'victory';
     state.selectedAction = 'endTurn';
-    addEvent(state, 'objective', 'The ritual completes. Night banners rise over the crypt gate.');
+    addEvent(state, 'objective', ritualVictoryMessage(state));
   }
 };
 
@@ -292,12 +447,16 @@ export const getReachableTiles = (state: BattleState, unitId = state.activeUnitI
 
 export const getAttackableTargets = (state: BattleState, unitId = state.activeUnitId): UnitState[] => {
   const unit = courtUnit(state, unitId);
-  const ability = unit?.abilities[0];
-  if (!unit || !ability || state.phase !== 'player' || unit.actionPoints <= 0) {
+  const ability = selectedAbility(unit, state.selectedAction);
+  if (!unit || !ability || !isTargetedAction(state.selectedAction) || state.phase !== 'player' || unit.actionPoints <= 0) {
     return [];
   }
 
-  return livingUnits(state, 'dawn').filter((enemy) => distance(unit.position, enemy.position) <= ability.range);
+  return livingUnits(state, 'dawn').filter(
+    (enemy) =>
+      distance(unit.position, enemy.position) <= ability.range &&
+      hasLineOfSight(state, unit.position, enemy.position, ability.range),
+  );
 };
 
 export const getEnemyIntents = (state: BattleState): EnemyIntent[] =>
@@ -314,7 +473,7 @@ export const getEnemyIntents = (state: BattleState): EnemyIntent[] =>
       };
     }
 
-    if (distance(enemy.position, target.position) <= ability.range) {
+    if (distance(enemy.position, target.position) <= ability.range && hasLineOfSight(state, enemy.position, target.position, ability.range)) {
       return {
         enemyId: enemy.id,
         targetId: target.id,
@@ -375,7 +534,39 @@ const beginPlayerTurn = (state: BattleState): void => {
 };
 
 const scoreHoldObjective = (state: BattleState): void => {
-  if (state.objective.type !== 'hold_ritual' || state.result !== 'none') {
+  if (state.result !== 'none') {
+    return;
+  }
+
+  if (state.objective.type === 'survive_dawn') {
+    state.objective.survivedTurns += 1;
+    addEvent(
+      state,
+      'objective',
+      `The court endures dawn wave ${state.objective.survivedTurns}/${state.objective.requiredTurns}.`,
+    );
+    refreshBattleResult(state);
+    return;
+  }
+
+  if (state.objective.type === 'protect_unit') {
+    const protectedUnit = state.units.find((unit) => unit.id === state.objective.protectedUnitId);
+    if (!protectedUnit || protectedUnit.downed || protectedUnit.hp <= 0) {
+      refreshBattleResult(state);
+      return;
+    }
+
+    state.objective.protectedTurns += 1;
+    addEvent(
+      state,
+      'objective',
+      `${protectedUnit.name} holds the breach ward (${state.objective.protectedTurns}/${state.objective.requiredTurns}).`,
+    );
+    refreshBattleResult(state);
+    return;
+  }
+
+  if (state.objective.type !== 'hold_ritual') {
     return;
   }
 
@@ -392,6 +583,18 @@ const scoreHoldObjective = (state: BattleState): void => {
   );
   refreshBattleResult(state);
 };
+
+const isRitualTile = (state: BattleState, position: GridPosition): boolean =>
+  state.objective.type === 'hold_ritual' &&
+  state.objective.ritualTiles.some((ritual) => samePosition(ritual, position));
+
+const isRelicObjectiveTile = (state: BattleState, position: GridPosition): boolean =>
+  state.objective.type === 'capture_relic' &&
+  state.objective.relicTiles.some((relic) => samePosition(relic, position));
+
+const isEscapeTile = (state: BattleState, position: GridPosition): boolean =>
+  state.objective.type === 'escape_route' &&
+  state.objective.exitTiles.some((exit) => samePosition(exit, position));
 
 const resolveEnemyTurn = (state: BattleState): void => {
   state.phase = 'enemy';
@@ -421,7 +624,9 @@ const resolveEnemyTurn = (state: BattleState): void => {
         continue;
       }
 
-      const damageDone = damageUnit(target, intent.damage);
+      const ability = enemy.abilities[0];
+      const preview = getAttackDamagePreview(state, enemy.id, target.id, intent.damage, ability?.range ?? 1);
+      const damageDone = damageUnit(target, preview?.damage ?? 1);
       if (intent.status && !target.downed) {
         addStatus(target, intent.status);
       }
@@ -720,7 +925,7 @@ export const attackWithActiveUnit = (battle: BattleState, targetId: string): Bat
   const state = clone(battle);
   const unit = activeUnit(state);
   const target = state.units.find((candidate) => candidate.id === targetId && !candidate.downed && candidate.hp > 0);
-  const ability = unit?.abilities[0];
+  const ability = selectedAbility(unit, state.selectedAction);
 
   if (!unit || !target || !ability || state.phase !== 'player' || unit.actionPoints <= 0) {
     return state;
@@ -731,12 +936,26 @@ export const attackWithActiveUnit = (battle: BattleState, targetId: string): Bat
     return state;
   }
 
-  const damageDone = damageUnit(target, ability.damage);
+  if (!hasLineOfSight(state, unit.position, target.position, ability.range)) {
+    addEvent(state, 'system', `${target.name} has no clear line of sight for ${ability.name}.`);
+    return state;
+  }
+
+  const preview = getAttackDamagePreview(state, unit.id, target.id, ability.damage, ability.range);
+  if (!preview) {
+    return state;
+  }
+
+  const damageDone = damageUnit(target, preview.damage);
   if (ability.status && !target.downed) {
     addStatus(target, ability.status);
   }
   unit.actionPoints = 0;
-  addEvent(state, 'player', `${unit.name} uses ${ability.name}, dealing ${damageDone} to ${target.name}.`);
+  addEvent(
+    state,
+    'player',
+    `${unit.name} uses ${ability.name}, dealing ${damageDone} to ${target.name}${preview.flankBonus > 0 ? ' with flank pressure' : ''}.`,
+  );
 
   refreshBattleResult(state);
   if (state.result === 'none') {
@@ -758,6 +977,165 @@ export const guardWithActiveUnit = (battle: BattleState): BattleState => {
   unit.actionPoints = 0;
   addStatus(unit, 'warded', 1);
   addEvent(state, 'player', `${unit.name} guards behind the command standard.`);
+  selectNextReadyCourtUnit(state);
+  return state;
+};
+
+export const interactWithActiveUnit = (battle: BattleState): BattleState => {
+  const state = clone(battle);
+  const unit = activeUnit(state);
+  if (!unit || state.phase !== 'player' || unit.actionPoints <= 0) {
+    return state;
+  }
+
+  const tile = tileAt(state, unit.position);
+  if (!tile) {
+    return state;
+  }
+
+  const cacheKey = tileKey(tile);
+  if (state.objective.type === 'capture_relic' && isRelicObjectiveTile(state, unit.position)) {
+    if (state.objective.captured) {
+      addEvent(state, 'objective', 'The relic ledger has already been seized.');
+      return state;
+    }
+
+    if (tile.hazard !== 'relic_cache') {
+      addEvent(state, 'system', `${unit.name} must reach the relic cache to seize the ledger.`);
+      return state;
+    }
+
+    state.objective.captured = true;
+    if (!state.claimedRelicCaches.includes(cacheKey)) {
+      state.claimedRelicCaches.push(cacheKey);
+    }
+    unit.hp = Math.min(unit.maxHp, unit.hp + 2);
+    unit.actionPoints = 0;
+    addStatus(unit, 'warded', 3);
+    addEvent(state, 'objective', `${unit.name} seizes the relic ledger, restoring 2 health and gaining a ward.`);
+    refreshBattleResult(state);
+    return state;
+  }
+
+  if (state.objective.type === 'escape_route' && isEscapeTile(state, unit.position)) {
+    if (state.objective.escapedUnitIds.includes(unit.id)) {
+      addEvent(state, 'objective', `${unit.name} has already crossed the fog bridge.`);
+      return state;
+    }
+
+    state.objective.escapedUnitIds.push(unit.id);
+    unit.actionPoints = 0;
+    addStatus(unit, 'warded', 2);
+    addEvent(
+      state,
+      'objective',
+      `${unit.name} escapes through the fog bridge (${state.objective.escapedUnitIds.length}/${state.objective.requiredEscapes}).`,
+    );
+    refreshBattleResult(state);
+    if (state.result === 'none') {
+      selectNextReadyCourtUnit(state);
+    }
+    return state;
+  }
+
+  if (tile.hazard === 'relic_cache' && !state.claimedRelicCaches.includes(cacheKey)) {
+    state.claimedRelicCaches.push(cacheKey);
+    unit.hp = Math.min(unit.maxHp, unit.hp + 2);
+    unit.actionPoints = 0;
+    addStatus(unit, 'warded', 3);
+    addEvent(state, 'objective', `${unit.name} opens a relic cache, restoring 2 health and gaining a ward.`);
+    selectNextReadyCourtUnit(state);
+    return state;
+  }
+
+  if (isRitualTile(state, unit.position)) {
+    if (state.objective.type === 'hold_ritual' && state.objective.heldTurns >= state.objective.requiredTurns) {
+      addEvent(state, 'objective', 'The ritual has already been claimed.');
+      return state;
+    }
+
+    if (unit.hasMoved) {
+      addEvent(state, 'system', `${unit.name} must begin on the ritual tile to channel it.`);
+      return state;
+    }
+
+    if (state.objective.type === 'hold_ritual') {
+      state.objective.heldTurns += 1;
+      unit.actionPoints = 0;
+      addStatus(unit, 'warded', 1);
+      addEvent(state, 'objective', `${unit.name} channels the ritual (${state.objective.heldTurns}/${state.objective.requiredTurns}).`);
+      refreshBattleResult(state);
+      if (state.result === 'none') {
+        selectNextReadyCourtUnit(state);
+      }
+      return state;
+    }
+  }
+
+  addEvent(state, 'system', `${unit.name} has nothing to interact with here.`);
+  return state;
+};
+
+export const useRelicPower = (battle: BattleState, relics: string[]): BattleState => {
+  const state = clone(battle);
+  const unit = activeUnit(state);
+  const relic = relics[0];
+  if (!unit || state.phase !== 'player' || unit.actionPoints <= 0 || state.relicPowerUsed || !relic) {
+    return state;
+  }
+
+  state.relicPowerUsed = true;
+  unit.actionPoints = 0;
+
+  if (relic === 'Canal Mirror') {
+    unit.hasMoved = false;
+    addStatus(unit, 'warded', 2);
+    state.selectedAction = 'move';
+    addEvent(state, 'objective', `${unit.name} invokes Canal Mirror, reopening a mirrored path.`);
+    return state;
+  }
+
+  if (relic === 'Bell Ash Reliquary') {
+    for (const enemy of livingUnits(state, 'dawn').slice(0, 2)) {
+      addStatus(enemy, 'dazed', 2);
+    }
+    addEvent(state, 'objective', `${unit.name} rings the Bell Ash Reliquary, dazing the dawn front.`);
+    selectNextReadyCourtUnit(state);
+    return state;
+  }
+
+  if (relic === 'Wall-Key of Thorns') {
+    unit.armor += 1;
+    unit.guarded = true;
+    addStatus(unit, 'warded', 1);
+    addEvent(state, 'objective', `${unit.name} turns the Wall-Key of Thorns and locks into cover.`);
+    selectNextReadyCourtUnit(state);
+    return state;
+  }
+
+  if (relic === 'Market Mask') {
+    for (const court of livingUnits(state, 'court')) {
+      court.hasMoved = false;
+    }
+    addStatus(unit, 'warded', 1);
+    state.selectedAction = 'move';
+    addEvent(state, 'objective', `${unit.name} raises the Market Mask, reopening court movement.`);
+    return state;
+  }
+
+  if (relic === 'Palace Nightglass') {
+    state.dawn.value = Math.max(0, state.dawn.value - 1);
+    for (const court of livingUnits(state, 'court')) {
+      addStatus(court, 'warded', 1);
+    }
+    addEvent(state, 'objective', `${unit.name} turns the Palace Nightglass and pushes dawn pressure back.`);
+    selectNextReadyCourtUnit(state);
+    return state;
+  }
+
+  unit.hp = Math.min(unit.maxHp, unit.hp + 3);
+  addStatus(unit, 'warded', 2);
+  addEvent(state, 'objective', `${unit.name} invokes ${relic}, restoring 3 health and gaining a ward.`);
   selectNextReadyCourtUnit(state);
   return state;
 };

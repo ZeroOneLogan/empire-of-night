@@ -20,6 +20,8 @@ declare global {
       cycleUnit: () => void;
       move: (position: GridPosition) => void;
       attack: (targetId: string) => void;
+      interact: () => void;
+      useRelic: () => void;
       guard: () => void;
       endTurn: () => void;
       reachableTiles: () => GridPosition[];
@@ -50,6 +52,8 @@ export const installDebugBridge = (store: EmpireOfNightStore): void => {
     cycleUnit: () => store.dispatch({ type: 'cycleUnit' }),
     move: (position) => store.dispatch({ type: 'move', position }),
     attack: (targetId) => store.dispatch({ type: 'attack', targetId }),
+    interact: () => store.dispatch({ type: 'interact' }),
+    useRelic: () => store.dispatch({ type: 'useRelic' }),
     guard: () => store.dispatch({ type: 'guard' }),
     endTurn: () => store.dispatch({ type: 'endTurn' }),
     reachableTiles: () => store.reachableTiles(),

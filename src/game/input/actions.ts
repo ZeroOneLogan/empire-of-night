@@ -12,6 +12,8 @@ export type PlayerIntent =
   | { type: 'cycleUnit' }
   | { type: 'move'; position: GridPosition }
   | { type: 'attack'; targetId: string }
+  | { type: 'interact' }
+  | { type: 'useRelic' }
   | { type: 'guard' }
   | { type: 'endTurn' }
   | { type: 'restartBattle' }

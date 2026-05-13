@@ -8,7 +8,7 @@ import {
   routeEventTitles,
   summarizeBalance,
 } from './content/route';
-import { playCue } from './audio/cues';
+import { audioCueCatalog, playCue } from './audio/cues';
 import type { PlayerIntent } from './input/actions';
 import { loadMetaProgress, saveMetaProgress } from './persistence/metaProgress';
 import { loadSettings, saveSettings } from './persistence/settings';
@@ -20,10 +20,12 @@ import {
   getAttackableTargets,
   getReachableTiles,
   guardWithActiveUnit,
+  interactWithActiveUnit,
   moveActiveUnit,
   resetBattle,
   selectAction,
   selectUnit,
+  useRelicPower,
 } from './simulation/battle';
 import type {
   AppScreen,
@@ -69,6 +71,7 @@ export class EmpireOfNightStore {
         doctrines: [...doctrineCatalog],
         leaders: [...leaderCatalog],
         routeEvents: [...routeEventTitles],
+        audioCues: [...audioCueCatalog],
       },
       settings: structuredClone(this.settings),
       balance: this.run ? summarizeBalance(this.run) : null,
@@ -127,6 +130,12 @@ export class EmpireOfNightStore {
       case 'attack':
         this.attack(intent.targetId);
         break;
+      case 'interact':
+        this.interact();
+        break;
+      case 'useRelic':
+        this.useRelic();
+        break;
       case 'guard':
         this.guard();
         break;
@@ -142,7 +151,7 @@ export class EmpireOfNightStore {
     this.rewards = [];
     this.routeEvent = null;
     this.screen = 'route';
-    this.play('select');
+    this.play('menuConfirm');
     this.emit();
   }
 
@@ -152,7 +161,7 @@ export class EmpireOfNightStore {
     this.routeEvent = null;
     this.battle = createInitialBattle(encounterId);
     this.screen = 'battle';
-    this.play('select');
+    this.play('menuConfirm');
     this.emit();
   }
 
@@ -169,7 +178,7 @@ export class EmpireOfNightStore {
     this.run.selectedNodeId = node.id;
     this.battle = createInitialBattle(node.encounterId, this.run.difficulty, this.run);
     this.screen = 'battle';
-    this.play('select');
+    this.play('menuConfirm');
     this.emit();
   }
 
@@ -300,7 +309,7 @@ export class EmpireOfNightStore {
     this.rewards = [];
     this.routeEvent = null;
     this.screen = 'menu';
-    this.play('select');
+    this.play('menuConfirm');
     this.emit();
   }
 
@@ -353,6 +362,29 @@ export class EmpireOfNightStore {
     this.battle = attackWithActiveUnit(this.battle, targetId);
     this.normalizeScreen();
     this.play('attack');
+    this.play('hit');
+    this.emit();
+  }
+
+  interact(): void {
+    if (!this.battle) {
+      return;
+    }
+
+    this.battle = interactWithActiveUnit(this.battle);
+    this.normalizeScreen();
+    this.play('reward');
+    this.emit();
+  }
+
+  useRelic(): void {
+    if (!this.battle) {
+      return;
+    }
+
+    this.battle = useRelicPower(this.battle, this.run?.relics ?? []);
+    this.normalizeScreen();
+    this.play('reward');
     this.emit();
   }
 
@@ -373,8 +405,12 @@ export class EmpireOfNightStore {
     }
 
     this.battle = endPlayerTurn(this.battle);
+    const cue =
+      this.battle.result === 'none' && this.battle.dawn.value >= this.battle.dawn.max - 1
+        ? 'dawnWarning'
+        : 'turnStart';
     this.normalizeScreen();
-    this.play('turn');
+    this.play(cue);
     this.emit();
   }
 

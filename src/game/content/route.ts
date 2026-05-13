@@ -18,6 +18,18 @@ export const relicCatalog = [
   'Palace Nightglass',
 ] as const;
 
+const relicActiveDetails: Record<(typeof relicCatalog)[number], string> = {
+  'Moon-Splinter Crown': 'Active: spend AP to restore 3 health and gain Warded 2 once per battle.',
+  'Canal Mirror': 'Active: spend AP to reopen this unit movement and gain Warded 2 once per battle.',
+  'Bell Ash Reliquary': 'Active: spend AP to daze the first two dawn enemies for 2 turns once per battle.',
+  'Wall-Key of Thorns': 'Active: spend AP to gain armor, guard, and a ward once per battle.',
+  'Market Mask': 'Active: spend AP to reopen movement for the whole court once per battle.',
+  'Palace Nightglass': 'Active: spend AP to reduce dawn pressure and ward the court once per battle.',
+};
+
+const relicActiveDetail = (relic: string | undefined): string | undefined =>
+  relic && relic in relicActiveDetails ? relicActiveDetails[relic as (typeof relicCatalog)[number]] : undefined;
+
 export const doctrineCatalog = ['crown', 'terror', 'shadow', 'blood', 'pact'] as const;
 
 export const leaderCatalog: LeaderDefinition[] = [
@@ -459,6 +471,7 @@ export const createRewardsForNode = (node: RouteNode): RewardOption[] => {
       title: relic,
       description: `Bind a ${node.district} relic into the local imperial archive.`,
       comparison: relicComparison[relic],
+      activeDetail: relicActiveDetail(relic),
     },
     {
       id: `${node.id}-doctrine`,
@@ -497,6 +510,7 @@ export const createRouteEventForRun = (run: RunState): RouteEventState => {
       ...event.choices.map((choice) => ({
         ...choice,
         id: `${event.id}-${run.currentTier}-${choice.id}`,
+        activeDetail: relicActiveDetail(choice.effects.relic),
       })),
       {
         id: `${event.id}-${run.currentTier}-hold-formation`,

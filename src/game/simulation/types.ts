@@ -13,11 +13,11 @@ export type UnitArchetype =
   | 'bell_warden'
   | 'dawn_exarch';
 
-export type TerrainKind = 'floor' | 'obstacle' | 'ritual';
+export type TerrainKind = 'floor' | 'cover' | 'obstacle' | 'ritual';
 
 export type HazardId = 'blood_mire' | 'veil_fog' | 'sunflare' | 'relic_cache';
 
-export type PlayerActionType = 'move' | 'attack' | 'guard' | 'endTurn';
+export type PlayerActionType = 'move' | 'attack' | 'special' | 'interact' | 'relic' | 'guard' | 'endTurn';
 
 export type EncounterId =
   | 'ritual-hold'
@@ -116,6 +116,32 @@ export type ObjectiveState =
       heldTurns: number;
       requiredTurns: number;
       description: string;
+    }
+  | {
+      type: 'capture_relic';
+      relicTiles: GridPosition[];
+      captured: boolean;
+      description: string;
+    }
+  | {
+      type: 'survive_dawn';
+      survivedTurns: number;
+      requiredTurns: number;
+      description: string;
+    }
+  | {
+      type: 'escape_route';
+      exitTiles: GridPosition[];
+      escapedUnitIds: string[];
+      requiredEscapes: number;
+      description: string;
+    }
+  | {
+      type: 'protect_unit';
+      protectedUnitId: string;
+      protectedTurns: number;
+      requiredTurns: number;
+      description: string;
     };
 
 export interface BattleState {
@@ -136,6 +162,8 @@ export interface BattleState {
     max: number;
   };
   enemyIntents: EnemyIntent[];
+  claimedRelicCaches: string[];
+  relicPowerUsed: boolean;
   events: BattleEvent[];
   nextEventId: number;
   result: 'none' | 'victory' | 'defeat';
@@ -159,6 +187,7 @@ export interface ContentSummary {
   doctrines: RunState['doctrine'][];
   leaders: LeaderDefinition[];
   routeEvents: string[];
+  audioCues: string[];
 }
 
 export interface LeaderDefinition {
@@ -210,6 +239,7 @@ export interface RewardOption {
   title: string;
   description: string;
   comparison: string;
+  activeDetail?: string;
 }
 
 export interface RouteEventChoice {
@@ -217,6 +247,7 @@ export interface RouteEventChoice {
   title: string;
   description: string;
   comparison: string;
+  activeDetail?: string;
   effects: {
     blood?: number;
     authority?: number;
